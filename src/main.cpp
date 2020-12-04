@@ -1,4 +1,5 @@
 #include <iostream>
+#include <matrix.hpp>
 
 /// @brief Test Struct for Doxygen tests
 struct Test {
@@ -19,6 +20,8 @@ struct Test {
 /// @brief Simple main Function
 /// @return 0, hopefully
 int main() {
+	glm::mat2 p;
+	
 	std::cout << "Hello" << std::endl;
 	system("pause");
 	return 0;

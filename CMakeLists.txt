@@ -4,8 +4,12 @@ project(Vulkan)
 
 add_executable(Test "src/main.cpp")
 
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/glm)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/glm/glm)
+
 # taken from https://vicrucann.github.io/tutorials/quick-cmake-doxygen/
 find_package(Doxygen QUIET)
+
 if (DOXYGEN_FOUND)
     # set input and output files
     set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile.in)
