@@ -3,9 +3,9 @@ cmake_minimum_required(VERSION 3.10)
 project(Vulkan)
 
 add_executable(Test "src/main.cpp")
+target_link_libraries(Test ${CMAKE_CURRENT_SOURCE_DIR}/lib/glfw3.lib)
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/glm)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/glm/glm)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/dep_inc)
 
 # taken from https://vicrucann.github.io/tutorials/quick-cmake-doxygen/
 find_package(Doxygen QUIET)

@@ -1,3 +1,7 @@
 .vs
 docs/Doxyfile
 docs/out
+dep_inc/GLFW
+dep_inc/glm
+lib/glfw3.3.lib
+/lib/glfw3.lib

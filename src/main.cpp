@@ -1,5 +1,6 @@
 #include <iostream>
-#include <matrix.hpp>
+#include <glm/matrix.hpp>
+#include <GLFW/glfw3.h>
 
 /// @brief Test Struct for Doxygen tests
 struct Test {
@@ -21,6 +22,14 @@ struct Test {
 /// @return 0, hopefully
 int main() {
 	glm::mat2 p;
+
+	glfwInit();
+
+	GLFWwindow* hndl = glfwCreateWindow(200, 200, "Test", NULL, NULL);
+	while (!glfwWindowShouldClose(hndl)) {
+		glfwPollEvents();
+	}
+	glfwDestroyWindow(hndl);
 	
 	std::cout << "Hello" << std::endl;
 	system("pause");
