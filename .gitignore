@@ -5,3 +5,7 @@ dep_inc/GLFW
 dep_inc/glm
 lib/glfw3.3.lib
 /lib/glfw3.lib
+rsccpy.bat
+res/mdl/
+res/tag/
+res/img/

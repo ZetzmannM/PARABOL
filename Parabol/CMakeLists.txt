@@ -26,7 +26,7 @@ if(WIN32)
 endif (WIN32)
 
 if(UNIX)
-    target_link_libraries(Parabol ${CMAKE_CURRENT_SOURCE_DIR}/../lib/libglfw3.so)
+    target_link_libraries(Parabol ${CMAKE_CURRENT_SOURCE_DIR}/../lib/libglfw3.a)
 endif (UNIX)
 
 

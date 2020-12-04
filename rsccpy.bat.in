@@ -1,0 +1,7 @@
+cd @CMAKE_SOURCE_DIR@
+
+:: Compile Shaders
+:: ./Autocompile.exe res/sha/
+
+rmdir /S /Q "@BUILD_RES_DIR@\"
+xcopy .\res "@BUILD_RES_DIR@\" /S /E /EXCLUDE:.\EXCLUDE
