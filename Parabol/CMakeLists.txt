@@ -19,7 +19,9 @@ else(WIN32)
 endif(WIN32)
 
 # Main Executable
-add_executable(Parabol ${FLG} "main.cpp"  )
+add_executable(Parabol ${FLG} "main.cpp" "ptr.h" "inttypes.h"  )
+
+set_property(TARGET Parabol PROPERTY CXX_STANDARD 17)
 
 if(WIN32)
     target_link_libraries(Parabol ${CMAKE_CURRENT_SOURCE_DIR}/../lib/glfw3.lib)
@@ -32,5 +34,5 @@ endif (UNIX)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../dep_inc)
 
-SOURCE_GROUP("HeaderFiles" ${LOCAL_SOURCE})
+SOURCE_GROUP("HeaderFiles" FILES ${LOCAL_SOURCE})
 SOURCE_GROUP("SourceFiles" FILES ${LOCAL_SOURCE_C})
