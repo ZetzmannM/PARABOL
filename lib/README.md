@@ -1,4 +1,4 @@
 Insert:  
-  - _glfw3.lib_ obtained by building https://github.com/glfw/glfw.git on your platform
+  - _glfw3.lib_ or _libglfw3.a_ obtained by building https://github.com/glfw/glfw.git on your platform
     
 in this directory
