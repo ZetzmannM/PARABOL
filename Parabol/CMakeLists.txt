@@ -9,12 +9,6 @@ FILE(GLOB LOCAL_SOURCE_C
     "*.c"
 )
 
-SET(SOURCE
-    ${SOURCE}
-    ${LOCAL_SOURCE}
-    PARENT_SCOPE
-)
-
 # Set Win32 flag for Windows
 if(WIN32)
     set(FLG 
@@ -26,7 +20,6 @@ endif(WIN32)
 
 # Main Executable
 add_executable(Parabol ${FLG} "main.cpp"  )
-
 
 if(WIN32)
     target_link_libraries(Parabol ${CMAKE_CURRENT_SOURCE_DIR}/../lib/glfw3.lib)
