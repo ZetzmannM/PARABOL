@@ -1,7 +1,8 @@
 Resource Directory. Contains:  
-	- Images
-	- Shader
-	- Models
-	- DataTags
+
+ -  Images
+ -  Shaders
+ -  Models
+ -  DataTags
 
 The resources are not part of the git repository (right now)
