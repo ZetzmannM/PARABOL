@@ -1,19 +1,14 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(Vulkan)
+project(Vulkan VERSION 0)
 
-add_executable(Test "src/main.cpp")
 
-if(WIN32)
-    target_link_libraries(Test ${CMAKE_CURRENT_SOURCE_DIR}/lib/glfw3.lib)
-endif (WIN32)
 
-if(UNIX)
-    target_link_libraries(Test ${CMAKE_CURRENT_SOURCE_DIR}/lib/libglfw3.so)
-endif (UNIX)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/dep_inc)
+#Actual Project
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Parabol/)
 
+#Auto Compile Doc
 # taken from https://vicrucann.github.io/tutorials/quick-cmake-doxygen/
 find_package(Doxygen QUIET)
 
