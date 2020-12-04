@@ -4,6 +4,9 @@ project(Vulkan VERSION 0)
 
 
 
+if(UNIX)
+    target_link_libraries(Test ${CMAKE_CURRENT_SOURCE_DIR}/lib/libglfw3.a)
+endif (UNIX)
 
 #Actual Project
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/Parabol/)
