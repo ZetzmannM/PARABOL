@@ -3,7 +3,14 @@ cmake_minimum_required(VERSION 3.10)
 project(Vulkan)
 
 add_executable(Test "src/main.cpp")
-target_link_libraries(Test ${CMAKE_CURRENT_SOURCE_DIR}/lib/glfw3.lib)
+
+if(WIN32)
+    target_link_libraries(Test ${CMAKE_CURRENT_SOURCE_DIR}/lib/glfw3.lib)
+endif (WIN32)
+
+if(UNIX)
+    target_link_libraries(Test ${CMAKE_CURRENT_SOURCE_DIR}/lib/libglfw3.so)
+endif (UNIX)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/dep_inc)
 
