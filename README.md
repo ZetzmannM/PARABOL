@@ -8,3 +8,8 @@ It uses:
 
 - GLM library
 - GLFW 
+
+It uses the _dep_inc_ folder for any includes necessary for the libraries used.  
+It uses the _lib_ folder for any binarys necessary.
+
+Refer to the README.md files in the directiories _dep_inc_ and _lib_ for more information
