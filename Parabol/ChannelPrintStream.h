@@ -11,12 +11,12 @@
 
 #ifdef ENV_WINDOWS
 #include <Windows.h>
-#define PRINT_FUNC(A) OutputDebugStringA(A);
+#define PRINT_FUNC(A) OutputDebugStringA(A)
 #endif
 
 #ifdef ENV_LINUX
 #include <iostream>
-#define PRINT_FUNC(A) std::cout << A std::endl; 
+#define PRINT_FUNC(A) std::cout << A std::endl
 #endif
 
 #define CHANNEL_DEBUG 0
@@ -37,7 +37,7 @@
 #define PTRSTR(A) ChannelPrintStream::instance().pointerToString(A)
 #define DEVPTRSTR(A) ChannelPrintStream::instance().devicePointerToString(A)
 
-#define ASSERT(X,M,C) if(!(X)) { PRINT_ERR(M, CH_SEVERITY_HALT, C); }
+#define ASSERT(X,M,C) ChannelPrintStream::stassert(X, __func__, M, C)
 #define COND_INFO(X, M, C) if(!(X)) {PRINT(M, C); }
 
 #define _TAG_SYNTAX_FORMATTER(d, a,b,c) (std::string("|")+d+"| "+ "[" + b + "] @" + a + ": " + c)
@@ -46,9 +46,10 @@
 /// It splits the output into channels, which can be individually disabled/enabled.
 /// Custom Channels can be added. The use of this class is mostly if not exclusively through the macros defined above
 struct ChannelPrintStream {
-private:
 	using print_channel = std::function<void(std::string&, uint64 arg)>;
 	using channel_indx = size_t;
+
+private:
 
 	struct print_channel_entry {
 		print_channel chn;
@@ -86,7 +87,7 @@ public:
 	/// @param in input
 	/// @param mes Optional Message
 	/// @param channel Destination Channel
-	void assert(bool in, const std::string& loc, const std::string& mes = "Assert Exception Triggered!", channel_indx channel = CHANNEL_DEBUG);
+	void stassert(bool in, const std::string& loc, const std::string& mes = "Assert Exception Triggered!", channel_indx channel = CHANNEL_DEBUG);
 
 	/// @brief Adds a Channel handle
 	/// @param  Function that handles the output for this Channel

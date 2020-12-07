@@ -32,7 +32,7 @@ void ChannelPrintStream::printError(const std::string& loc, const std::string& f
 		_haltOrWarn(loc, f, severity >= CH_SEVERITY_HALT);
 	}
 }
-void ChannelPrintStream::assert(bool in, const std::string& loc, const std::string& mes, channel_indx channel) {
+void ChannelPrintStream::stassert(bool in, const std::string& loc, const std::string& mes, channel_indx channel) {
 	if (!in) {
 		printError(loc, mes, CH_SEVERITY_HALT, channel);
 	}

@@ -1,6 +1,10 @@
 #include <GLFW/glfw3.h>
+#include <glm/vec2.hpp>
+#include <string>
 
 #include "ChannelPrintStream.h"
+#include "Surface.h"
+#include "Timer.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -8,51 +12,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 #else
 int main() {
 #endif
+	//++++ TO TEST: - Timer.cpp, Surface.cpp ++++ 
+	TimeHandler hnd = TimeHandler(true, 30, 20);
 
-	glfwInit();
-	GLFWwindow* hndl = glfwCreateWindow(200, 200, "Test", NULL, NULL);
+	Surface::Window w = Surface::Window({ 100,300,100,300 }, NULL, {}, "TestWindow");
 
-	//++++ TEST CHANNELPRINTSTREAM ++++ 
-	PRINT("Test String", CHANNEL_DEBUG);
-	PRINT("Test2", CHANNEL_VULKAN);
-	PRINT("Test3", CHANNEL_VULKAN_DEBUG);
-	PRINT("Test4", CHANNEL_GLFW);
-
-	PRINT_ERR("Error1", CH_SEVERITY_HINT, CHANNEL_DEBUG);
-	PRINT_ERR("Error2", CH_SEVERITY_WARNING, CHANNEL_DEBUG);
-	try{
-		PRINT_ERR("Error3", CH_SEVERITY_HALT, CHANNEL_DEBUG);
-	}
-	catch (std::exception& std) {	
-		PRINT_DEBUG("CAUGHT1");
-	}
-
-	try {
-		ASSERT(false, "Success", CHANNEL_DEBUG);
-	}
-	catch (std::exception& std) { 
-		PRINT_DEBUG("CAUGHT2");
-	}
-
-	COND_INFO(false, "This worked!", CHANNEL_VULKAN);
-
-	int a = 5;
-	int* aptr = &a;
-
-	PRINT_DEBUG(PTRSTR(aptr));
-	PRINT_DEBUG(DEVPTRSTR(aptr));
-
-	PRINT_DEBUG("End Test");
 	//++++ TEST OVER ++++ 
-
-
-	while (!glfwWindowShouldClose(hndl)) {
-		glfwSwapBuffers(hndl);
+	while (!glfwWindowShouldClose(w.getGLFWHandle())) {
+		hnd.start();
+		// Render stuff in here theoretically
+		PRINT_DEBUG("RENDER");
+		hnd.stop();
+		hnd.vsync();
+		glfwSwapBuffers(w.getGLFWHandle());
 		glfwPollEvents();
 	}
-	
-	glfwDestroyWindow(hndl);
-	
 
 	return 0;
 }
