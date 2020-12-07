@@ -19,7 +19,7 @@ else(WIN32)
 endif(WIN32)
 
 # Main Executable
-add_executable(Parabol ${FLG} "main.cpp" "ptr.h" "inttypes.h"   "ChannelPrintStream.h" "ChannelPrintStream.cpp" "Env.h")
+add_executable(Parabol ${FLG} "main.cpp" "ptr.h" "inttypes.h"   "ChannelPrintStream.h" "ChannelPrintStream.cpp" "Env.h" "StringUtils.h" "StringUtils.cpp")
 
 set_property(TARGET Parabol PROPERTY CXX_STANDARD 17)
 

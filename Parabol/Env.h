@@ -1,5 +1,7 @@
 #pragma once
 
+/// Include this file for plattform dependent stuff
+
 #if defined(_WIN32) | defined(_WIN64) | defined(__WIN32__) | defined(__WINDOWS__)
 	#define ENV_WINDOWS
 #endif
