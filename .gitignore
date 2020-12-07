@@ -9,3 +9,8 @@ rsccpy.bat
 res/mdl/
 res/tag/
 res/img/
+/lib/shaderc_combined.lib
+/lib/VkLayer_utils.lib
+/lib/vulkan-1.lib
+/dep_inc/shaderc
+/dep_inc/vulkan

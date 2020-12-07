@@ -2,7 +2,6 @@
 #include <memory>
 #include <utility>
 
-
 /// @brief Just an alias, to make is clear, that this pointer is only used to PASS data from one place to another
 template<typename T>
 using pass_ptr = std::unique_ptr<T>;
@@ -16,7 +15,7 @@ private:
 public:
 
 	wrap_ptr();
-	wrap_ptr(wrap_ptr<T>&&)
+	wrap_ptr(wrap_ptr<T>&&);
 	wrap_ptr(const wrap_ptr<T>&);
 	
 	wrap_ptr(pass_ptr<T>&&);
@@ -27,7 +26,7 @@ public:
 	wrap_ptr& operator=(pass_ptr<T>&&);
 	
 	/// @brief Whether this wrap_ptr holds a valid handle
-	operator bool() const { return data; }
+	operator bool() const { return static_cast<bool>(data); }
 
 	T* operator->();
 	const T* operator->() const;
@@ -63,14 +62,17 @@ wrap_ptr<T>::wrap_ptr(const wrap_ptr<T>& ref) {
 template<typename T>
 wrap_ptr<T>& wrap_ptr<T>::operator=(const wrap_ptr<T>& ref) {
 	_cpy(ref);
+	return *this;
 }
 template<typename T>
 wrap_ptr<T>& wrap_ptr<T>::operator=(wrap_ptr<T>&& ref) {
 	this->data = std::move(ref.data);
+	return *this;
 }
 template<typename T>
 wrap_ptr<T>& wrap_ptr<T>::operator=(pass_ptr<T>&& ref) {
 	this->data = std::move(ref);
+	return *this;
 }
 template<typename T>
 T* wrap_ptr<T>::operator->() {

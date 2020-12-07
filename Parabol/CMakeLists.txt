@@ -19,16 +19,18 @@ else(WIN32)
 endif(WIN32)
 
 # Main Executable
-add_executable(Parabol ${FLG} "main.cpp" "ptr.h" "inttypes.h"  )
+add_executable(Parabol ${FLG} "main.cpp" "ptr.h" "inttypes.h"   "ChannelPrintStream.h" "ChannelPrintStream.cpp" "Env.h")
 
 set_property(TARGET Parabol PROPERTY CXX_STANDARD 17)
 
 if(WIN32)
     target_link_libraries(Parabol ${CMAKE_CURRENT_SOURCE_DIR}/../lib/glfw3.lib)
+    target_link_libraries(Parabol ${CMAKE_CURRENT_SOURCE_DIR}/../lib/vulkan-1.lib)
 endif (WIN32)
 
 if(UNIX)
     target_link_libraries(Parabol ${CMAKE_CURRENT_SOURCE_DIR}/../lib/libglfw3.a)
+    target_link_libraries(Parabol ${CMAKE_CURRENT_SOURCE_DIR}/../lib/libvulkan-1.a)
 endif (UNIX)
 
 
