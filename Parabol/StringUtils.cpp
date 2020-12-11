@@ -16,6 +16,7 @@ std::vector<std::string> StringUtils::split(const std::string& input, char split
 	out.push_back(parse);
 	return out;
 }
+
 #ifdef ENV_WINDOWS
 #include "Windows.h"
 std::wstring StringUtils::stringToWideString(const std::string& str) {
@@ -26,3 +27,35 @@ std::wstring StringUtils::stringToWideString(const std::string& str) {
 	return wstrTo;
 }
 #endif
+
+void NonCpyStringContainer::add(const std::string& ref) {
+	char* cpy = new char[ref.size() + 1];
+	std::strcpy(cpy, ref.c_str());
+	this->strs.push_back(cpy);
+};
+NonCpyStringContainer::~NonCpyStringContainer() {
+	for (char* ch : strs) {
+		delete[] ch;
+	}
+}
+NonCpyStringContainer::NonCpyStringContainer(NonCpyStringContainer&& rref) noexcept {
+	this->strs = std::move(rref.strs);
+}
+NonCpyStringContainer& NonCpyStringContainer::operator=(NonCpyStringContainer&& rref) noexcept {
+	for (char* ch : strs) {
+		delete[] ch;
+	}
+	this->strs = std::move(rref.strs);
+	return *this;
+}
+char** NonCpyStringContainer::data() {
+	return strs.data();
+}
+void NonCpyStringContainer::add(const std::vector<std::string>& rref) {
+	for (const std::string& ref : rref) {
+		this->add(ref);
+	}
+}
+uint32 NonCpyStringContainer::size() {
+	return this->strs.size();
+}

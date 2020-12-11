@@ -44,14 +44,14 @@ void ChannelPrintStream::_prntFormattedSplit(const std::string& locationID, cons
 		(this->channels[channel]).chn((_TAG_SYNTAX_FORMATTER(this->channels[channel].name, locationID, tag, out.at(i)) + "\n"), param);
 	}
 }
-std::string ChannelPrintStream::pointerToString(const void* ptr) const {
+std::string ChannelPrintStream::pointerToString(const void* vkInst) const {
 	std::stringstream sstream;
-	sstream << "0x" << std::hex << reinterpret_cast<intptr_t>(ptr);
+	sstream << "0x" << std::hex << reinterpret_cast<intptr_t>(vkInst);
 	return sstream.str();
 }
-std::string ChannelPrintStream::devicePointerToString(const void* ptr) const {
+std::string ChannelPrintStream::devicePointerToString(const void* vkInst) const {
 	std::stringstream sstream;
-	sstream << "D_" << std::hex << reinterpret_cast<intptr_t>(ptr);
+	sstream << "D_" << std::hex << reinterpret_cast<intptr_t>(vkInst);
 	return sstream.str();
 }
 ChannelPrintStream::ChannelPrintStream() {

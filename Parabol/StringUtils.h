@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "inttypes.h"
 #include "Env.h"
 
 namespace Util {
@@ -16,5 +17,34 @@ namespace Util {
 		static std::wstring stringToWideString(const std::string& str);
 #endif
 	};
+
+	struct NonCpyStringContainer {
+	private:
+		std::vector<char*> strs;
+
+	public:
+		NonCpyStringContainer() {}
+		~NonCpyStringContainer();
+
+		NonCpyStringContainer(NonCpyStringContainer&& ref) noexcept;
+		NonCpyStringContainer& operator=(NonCpyStringContainer&& d) noexcept;
+
+		NonCpyStringContainer(const NonCpyStringContainer& ref) = delete;
+		NonCpyStringContainer& operator=(const NonCpyStringContainer&) = delete;
+
+		/// @return C-Str container
+		char** data();
+
+		/// @brief Adds a name to the catalog 
+		void add(const std::string&);
+
+		/// @brief Adds all strings to the catalog 
+		void add(const std::vector<std::string>&);
+
+		uint32 size();
+
+	};
+
+
 
 }

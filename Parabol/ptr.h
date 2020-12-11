@@ -1,20 +1,22 @@
 #pragma once
 #include <memory>
 #include <utility>
+#include <vector>
 
 /// @brief Just an alias, to make is clear, that this pointer is only used to PASS data from one place to another
 template<typename T>
 using pass_ptr = std::unique_ptr<T>;
 
 /// @brief A class similar to unique_ptr but copyable, in the sense, that deep-copies are performed when this object is being copied (!)
-template<
-	typename T>
+template< typename T >
 struct wrap_ptr {
 private:
 	pass_ptr<T> data;
+
 public:
 
 	wrap_ptr();
+	wrap_ptr(T* vkInst);
 	wrap_ptr(wrap_ptr<T>&&);
 	wrap_ptr(const wrap_ptr<T>&);
 	
@@ -24,7 +26,12 @@ public:
 	wrap_ptr& operator=(wrap_ptr<T>&&);
 
 	wrap_ptr& operator=(pass_ptr<T>&&);
+	wrap_ptr& operator=(T*& vkInst);
 	
+
+	/// @brief Deletes the internal pointer
+	void destroy();
+
 	/// @brief Whether this wrap_ptr holds a valid handle
 	operator bool() const { return static_cast<bool>(data); }
 
@@ -45,6 +52,7 @@ private:
 	void _cpy(const wrap_ptr& ref);
 };
 
+
 template<typename T>
 wrap_ptr<T>::wrap_ptr() : data{ nullptr } { }
 template<typename T>
@@ -54,6 +62,10 @@ wrap_ptr<T>::wrap_ptr(pass_ptr<T>&& ref) {
 template<typename T>
 wrap_ptr<T>::wrap_ptr(wrap_ptr<T>&& ref) {
 	this->data = std::move(ref.data);
+}
+template<typename T>
+wrap_ptr<T>::wrap_ptr(T* vkInst) {
+	this->data = std::unique_ptr<T>(vkInst);
 }
 template<typename T>
 wrap_ptr<T>::wrap_ptr(const wrap_ptr<T>& ref) {
@@ -75,6 +87,10 @@ wrap_ptr<T>& wrap_ptr<T>::operator=(pass_ptr<T>&& ref) {
 	return *this;
 }
 template<typename T>
+wrap_ptr<T>& wrap_ptr<T>::operator=(T*& vkInst) {
+	this->data = vkInst;
+}
+template<typename T>
 T* wrap_ptr<T>::operator->() {
 	return this->data.operator->();
 }
@@ -93,4 +109,8 @@ T* wrap_ptr<T>::get() {
 template<typename T>
 const T* wrap_ptr<T>::get() const {
 	return this->data.get();
+}
+template<typename T>
+void wrap_ptr<T>::destroy() {	
+	this->data = nullptr; //thanks std!!
 }

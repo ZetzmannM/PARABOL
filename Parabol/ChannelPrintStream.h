@@ -13,6 +13,7 @@
 #include <Windows.h>
 #define PRINT_FUNC(A) OutputDebugStringA(A)
 #endif
+#include "inc_setting.h"
 
 #ifdef ENV_LINUX
 #include <iostream>
@@ -32,13 +33,21 @@
 #define PRINT(M, C) ChannelPrintStream::instance().printInfo(__func__, M, C)
 #define PRINT_DEBUG(M) PRINT(M, CHANNEL_DEBUG)
 
+#ifdef _DEBUG
+#define DEBUG_PRINT(M, C) PRINT(M, C)
+#else
+#define DEBUG_PRINT(M, C)
+#endif
+
 #define PRINT_ERR(M, S, C) ChannelPrintStream::instance().printError(__func__, M, S, C)
 
 #define PTRSTR(A) ChannelPrintStream::instance().pointerToString(A)
 #define DEVPTRSTR(A) ChannelPrintStream::instance().devicePointerToString(A)
 
-#define ASSERT(X,M,C) ChannelPrintStream::stassert(X, __func__, M, C)
+#define ASSERT(X,M,C) ChannelPrintStream::instance().stassert(X, __func__, M, C)
 #define COND_INFO(X, M, C) if(!(X)) {PRINT(M, C); }
+
+#define VK_CHECK(X, M, C, S) {VkResult res; if( (res = X) != VK_SUCCESS ){ PRINT_ERR(M + std::to_string(res), S, C); }}
 
 #define _TAG_SYNTAX_FORMATTER(d, a,b,c) (std::string("|")+d+"| "+ "[" + b + "] @" + a + ": " + c)
 
@@ -96,12 +105,12 @@ public:
 
 	///@brief Converts the passed pointer into a string
 	///Useful for deconst debugging
-	std::string pointerToString(const void* ptr) const;
+	std::string pointerToString(const void* vkInst) const;
 
 	///@brief Converts the passed device pointer into a string
 	///Useful for deconst debugging
 	///Difference to pointerToString are solely about formatting
-	std::string devicePointerToString(const void* ptr) const;
+	std::string devicePointerToString(const void* vkInst) const;
 
 	/// @brief Returns the instance (Singleton)
 	static ChannelPrintStream& instance();
