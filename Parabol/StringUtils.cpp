@@ -56,6 +56,6 @@ void NonCpyStringContainer::add(const std::vector<std::string>& rref) {
 		this->add(ref);
 	}
 }
-uint32 NonCpyStringContainer::size() {
+size_t NonCpyStringContainer::size() {
 	return this->strs.size();
 }

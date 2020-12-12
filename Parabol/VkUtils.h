@@ -5,12 +5,16 @@
 #include <vulkan/vulkan.h>
 #include <map>
 #include <functional>
+#include <atomic>
 
+#include "Sync.h"
 #include "inttypes.h"
 #include "ptr.h"
 #include "StringUtils.h"
 
 #include "inc_setting.h"
+#include "Surface.h"
+#include "meta_tags.h"
 
 #include "GLFW/glfw3.h"
 
@@ -57,12 +61,40 @@ namespace VK {
 		std::vector<VkSurfaceFormatKHR> formats;
 		std::vector<VkPresentModeKHR> presentModes;
 	};
-	struct DeviceQueueProfile {
+
+	struct DeviceQueueCount {
 		uint64 totalQueueCount = 0;
 		/// @brief Pairs of the amount of queues and their priority
 		std::map<vk_queue_type, std::pair<uint32, float>> queueFamilies;
 
-		DeviceQueueProfile(uint16 g = 0, uint16 p = 0, uint16 t = 0, uint16 c = 0);
+		DeviceQueueCount(uint16 g = 0, uint16 p = 0, uint16 t = 0, uint16 c = 0);
+	};
+
+	/// @brief Saves how many queues of which type and priority are available/requested from a Device
+	struct DeviceQueueProfile {
+		DeviceQueueCount queueCount;
+
+	private:
+		std::atomic_int graphicsQueueCounter = 0;
+		std::atomic_int presentQueueCounter = 0;
+		std::atomic_int transferQueueCounter = 0;
+		std::atomic_int computeQueueCounter = 0;		
+	public:
+		
+		DeviceQueueProfile(const DeviceQueueCount& ref);
+		
+		/// @brief Tries to reserve a queue for a queueSet from the set of queues given to a device upon creation (The maximum amount is specified in the DevProfile of the VulkanInstanceInfo)
+		/// @param type type of desired queue
+		/// @return index of queue, or -1 if no more queues are available
+		thread_safe int reserveQueue(vk_queue_type type);
+	};
+
+	/// @brief Saves whi vch Queues are required/requested for a QueueSet
+	struct QueueProfile {
+		bool graphics = true;
+		bool present = false;
+		bool transfer = true;
+		bool compute = false;
 	};
 
 	struct PhyDevProfile {
@@ -77,7 +109,25 @@ namespace VK {
 	};
 	struct DevProfile {
 		/// @brief The amount and types of the queues requested
-		DeviceQueueProfile queueProfile = DeviceQueueProfile(1, 1, 1, 0);
+		DeviceQueueCount queueProfile = DeviceQueueCount(1, 1, 1, 0);
+
+		/// @brief Features to be enabled in Device Creation
+		VkPhysicalDeviceFeatures features = {};
+
+		/// @brief Requested Layers & Extensions, if they are not availabe, they are ignored.
+		/// To check which extensions/layers are enabled (and therefore available) check the layers/extensions catalog of the Device
+		/// Required Extensions for Debugging/GLFW are automatically added
+		std::vector<std::string> requestedLayers;
+
+		/// @brief Requested Layers & Extensions, if they are not availabe, they are ignored.
+		/// To check which extensions/layers are enabled (and therefore available) check the layers/extensions catalog of the Device
+		/// Required Extensions for Debugging/GLFW are automatically added
+		std::vector<std::string> requestedExtensions;
+
+	};
+	struct SwapchainProfile {
+		uint32 swapchainImageSize = 1;
+
 	};
 	struct AppInfo {
 		std::string name = "Application";
@@ -93,6 +143,9 @@ namespace VK {
 		/// @brief Information about the Device to be created
 		DevProfile devProf;
 
+		/// @brief Information about the SwapChain to be created
+		SwapchainProfile swapChainProfile;
+		
 		/// @brief Requested Layers & Extensions, if they are not availabe, they are ignored.
 		/// To check which extensions/layers are enabled (and therefore available) check the layers/extensions catalog of the Vulkaninstance
 		/// Required Extensions for Debugging/GLFW are automatically added
@@ -104,9 +157,22 @@ namespace VK {
 		std::vector<std::string> requestedExtensions;
 
 		/// @brief Window for Surface Creation
-		GLFWwindow* window = nullptr;
+		Surface::Window* window = nullptr;
 
 	};
+
+
+	struct VulkanInterface;
+	struct VulkanInstance;
+	struct PhysicalDevice;
+	struct Device;
+	struct SwapChain;
+	struct Pipeline;
+	struct PipelineSet;
+	struct CommandPoolSet;
+	struct QueueSet;
+
+#define FRIEND_CLUB friend Pipeline; friend PipelineSet; friend VulkanInterface; friend SwapChain; friend VulkanInstance; friend SwapChain; friend Device; friend QueueSet; friend CommandPoolSet;
 
 	struct VulkanInterface {
 	private:
@@ -116,29 +182,39 @@ namespace VK {
 
 		static VulkanInstance& instance();
 
+		//
+		static uint32 nextFrame();
+		//
+
 		static void destroyInstance();
 	};
 
-	struct PhysicalDevice;
-	struct Device;
-
 	/// @brief Wrapper class for the VkInstance, follows RAII
 	struct VulkanInstance {
-		/// @brief class used to keep track of layers/extensions that are enabled
-		
+		FRIEND_CLUB
+	
 		VkInstance hndl = nullptr;
+
+	private:
+		
 		VkSurfaceKHR surface = nullptr;
 		VulkanInstanceInfo instanceInfo;
-
-		/// @brief PhysicalDevice handle. Only one device is supported (No DeviceGroup)
-		wrap_ptr<PhysicalDevice> phyDev; 
-
-		/// @brief LogicalDevice handle, Only one device is supported
-		wrap_ptr<Device> dev;
 
 		wrap_ptr<Catalog> layers;
 		wrap_ptr<Catalog> extensions;
 		VkDebugUtilsMessengerEXT debugMessenger;
+
+	public:
+
+		/// @brief PhysicalDevice handle. Only one device is supported (No DeviceGroup)
+		wrap_ptr<PhysicalDevice> phyDev;
+
+		/// @brief LogicalDevice handle, Only one device is supported
+		wrap_ptr<Device> dev;
+
+		/// @brief Create SwapChain
+		wrap_ptr<SwapChain> swapChain;
+
 
 		VulkanInstance(const VulkanInstanceInfo&);
 		
@@ -151,7 +227,10 @@ namespace VK {
 		VulkanInstance& operator=(VulkanInstance&&) = delete;
 
 	private:
-
+		
+		/// @brief Called when the Swap chain is recreated (after the swapchain itself has been already been rebuilt)
+		void _swapChainRecreateNotify();
+		
 		/// @brief Vulkan requires you to find a Physical device with which to define a logical device with which most of the interaction with Vulkan is then handled
 		void _findPhysicalDevice();
 
@@ -160,33 +239,165 @@ namespace VK {
 
 	};
 
-	/// @brief POD style class representing a Physical Device. 
+	/// @brief POD style class representing ua Physical Device. 
 	struct PhysicalDevice {
+		FRIEND_CLUB
+
 		VulkanInstance* vkInst = nullptr;
 		VkPhysicalDevice hndl = nullptr;
 
+	private:
+		
 		SurfaceProperties surfProps;
-		PhyDevQueueFamilies phyDev;
+		PhyDevQueueFamilies queueFamilies;
 
 		VkPhysicalDeviceProperties props;
 		VkPhysicalDeviceFeatures features;
-
+	public:
 		PhysicalDevice(VulkanInstance*, VkPhysicalDevice, const SurfaceProperties&, const PhyDevQueueFamilies&, const VkPhysicalDeviceProperties&, const VkPhysicalDeviceFeatures&);
 	};
 
 	/// @brief Wrapper class for the VkDevice, follows RAII
 	struct Device {
-		VulkanInstance* vkInst;
-		VkDevice hndl;
+		FRIEND_CLUB
+
+		VulkanInstance* vkInst = nullptr;
+		VkDevice hndl = nullptr;
+
+	private:
+		wrap_ptr<Catalog> extensions;
+		wrap_ptr<Catalog> layers;
 
 		DeviceQueueProfile queueProf;
-
+	public:
+		
 		Device(VulkanInstance* ptr);
 		~Device();
 
 	};
 
+	// +++++++++++++++++++++ "Actual" Rendering components ++++++++++
 
+	/// @brief A set of queues that can be used by a specific Thread/Component
+	struct QueueSet {
+		VkQueue graphics = nullptr;
+		VkQueue present = nullptr;
+		VkQueue transfer = nullptr;
+		VkQueue compute = nullptr;
 
+		/// @brief Fetches (already existing) queues, WITHOUT RESERVING. An index value for -1 means, that no Queue of that type is fetched
+		/// @param g graphics queue Index 
+		/// @param p present queue Index
+		/// @param t transfer queue Index
+		/// @param c compute queue Index
+		QueueSet(VulkanInstance*, int g, int p, int t, int c = -1);
+
+		/// @brief Contructs a new QueueSet, that is, it actually reserves queues 
+		QueueSet(VulkanInstance*, QueueProfile);
+
+	private:
+		void _fetch(VulkanInstance*, int g, int p, int t, int c);
+	};
+
+	/// @brief A set of commandpools that can be used by a specific Thread/Component
+	struct CommandPoolSet {
+		VkCommandPool graphics = nullptr;
+		VkCommandPool present = nullptr;
+		VkCommandPool transfer = nullptr;
+		VkCommandPool compute = nullptr;
+		VulkanInstance* vkInst;
+
+		CommandPoolSet(VulkanInstance*, QueueProfile, std::map<vk_queue_type, VkCommandPoolCreateFlags>& flags = std::map<vk_queue_type, VkCommandPoolCreateFlags>());
+		~CommandPoolSet();
+		
+	private:
+		VkCommandPool _create(uint32, VkCommandPoolCreateFlags);
+
+	};
+
+	/// @brief The threads responsible for rendering HAVE TO use these synchronization primitives to ensure synchronization with the SwapChain
+	/// These primitives should be cited for the last vkQueueSubmit as waitforSemaphore, signalSemaphore and the signalFence as an argument
+	/// the waitForRender Barrier should be waited for before even beginning rendering
+	struct RenderSubmitSynchronizationSet {
+		VkSemaphore* waitFor = nullptr;
+		VkSemaphore* signal = nullptr;
+		VkFence* signalFence = nullptr;
+		Sync::Barrier* waitForRender = nullptr;
+	};
+
+	struct SwapChain {
+		FRIEND_CLUB
+
+		VulkanInstance* vkInst = nullptr;
+		VkSwapchainKHR hndl = nullptr;
+
+	private:
+		std::vector<VkSemaphore> imageAvailableSemaphore;
+		std::vector<VkSemaphore> renderFinishedSemaphore;
+		std::vector<VkFence> renderFinishedFence;
+		std::vector<wrap_ptr<Sync::Barrier>> renderBeginBarrier;
+
+		std::vector<VkImage> swapChainImages;
+		std::vector<VkImageView> imageViews;
+
+		QueueSet queues;
+		
+		VkSurfaceFormatKHR surfaceFormat;
+		VkPresentModeKHR presentMode;
+		VkExtent2D extend;
+
+	public:
+
+		SwapChain(VulkanInstance*, SwapchainProfile);
+		~SwapChain();
+
+		/// @brief See RenderSubmitSynchronizationSet
+		RenderSubmitSynchronizationSet syncPrimitiveForFrame(uint32 indx);
+
+		/// @brief This method is 90% of the magic of the SwapChain, it basically presents the next frame and 
+		/// Causes the next to be rendered
+		uint32 nextFrame();
+
+		/// @return  SwapChain size, that is, how many frames can be rendered concurrently
+		uint32 size();
+
+	private:
+		bool first = true;
+		uint32_t imageIndex = 0;
+
+		void _recreate();
+
+		uint32 currentFrame = 0;
+
+		struct __SCProps {
+			VkSurfaceFormatKHR surfaceFormat;
+			VkPresentModeKHR presentMode;
+			VkExtent2D extend;
+		};
+
+		void _destroy();
+		void _setup(SwapchainProfile scprf);
+		__SCProps queryFrom(const SurfaceProperties&);
+	};
+
+	/// @brief A wrapper class for a single Pipeline
+	struct Pipeline {
+		FRIEND_CLUB
+	private:
+
+	public:
+
+	private:
+	};
+	/// @brief This struct manages all Pipelines
+	struct PipelineSet {
+		FRIEND_CLUB
+	private:
+
+	public:
+
+	private:
+
+	};
 
 }

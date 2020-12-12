@@ -1,3 +1,3 @@
 #pragma once
 
-#define __SKIP_VERBOSE 0
+#define __SKIP_VERBOSE 1

@@ -17,15 +17,15 @@ public:
 
 	wrap_ptr();
 	wrap_ptr(T* vkInst);
-	wrap_ptr(wrap_ptr<T>&&);
+	wrap_ptr(wrap_ptr<T>&&) noexcept;
 	wrap_ptr(const wrap_ptr<T>&);
 	
 	wrap_ptr(pass_ptr<T>&&);
 	
 	wrap_ptr& operator=(const wrap_ptr<T>&);
-	wrap_ptr& operator=(wrap_ptr<T>&&);
+	wrap_ptr& operator=(wrap_ptr<T>&&) noexcept;
 
-	wrap_ptr& operator=(pass_ptr<T>&&);
+	wrap_ptr& operator=(pass_ptr<T>&&) noexcept;
 	wrap_ptr& operator=(T*& vkInst);
 	
 
@@ -60,7 +60,7 @@ wrap_ptr<T>::wrap_ptr(pass_ptr<T>&& ref) {
 	this->data = std::move(ref);
 }
 template<typename T>
-wrap_ptr<T>::wrap_ptr(wrap_ptr<T>&& ref) {
+wrap_ptr<T>::wrap_ptr(wrap_ptr<T>&& ref) noexcept {
 	this->data = std::move(ref.data);
 }
 template<typename T>
@@ -77,12 +77,12 @@ wrap_ptr<T>& wrap_ptr<T>::operator=(const wrap_ptr<T>& ref) {
 	return *this;
 }
 template<typename T>
-wrap_ptr<T>& wrap_ptr<T>::operator=(wrap_ptr<T>&& ref) {
+wrap_ptr<T>& wrap_ptr<T>::operator=(wrap_ptr<T>&& ref) noexcept {
 	this->data = std::move(ref.data);
 	return *this;
 }
 template<typename T>
-wrap_ptr<T>& wrap_ptr<T>::operator=(pass_ptr<T>&& ref) {
+wrap_ptr<T>& wrap_ptr<T>::operator=(pass_ptr<T>&& ref) noexcept {
 	this->data = std::move(ref);
 	return *this;
 }

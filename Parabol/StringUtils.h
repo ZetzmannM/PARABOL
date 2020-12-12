@@ -41,7 +41,7 @@ namespace Util {
 		/// @brief Adds all strings to the catalog 
 		void add(const std::vector<std::string>&);
 
-		uint32 size();
+		size_t size();
 
 	};
 

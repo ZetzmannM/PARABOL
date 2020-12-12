@@ -46,7 +46,7 @@ private:
 
 	std::chrono::duration<double, std::nano> elapsedTime = std::chrono::duration<double, std::nano>(0);
 	__TimeMark cycMeasure;
-	std::chrono::duration<double, std::nano> cycVal;
+	std::chrono::duration<double, std::nano> cycVal = std::chrono::duration<double, std::nano>(0);;
 
 	std::chrono::time_point<std::chrono::__CLOCK> tstart;
 	bool running = false;

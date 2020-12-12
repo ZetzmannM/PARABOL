@@ -51,7 +51,7 @@ glm::i32vec2 Window::getWindowPosition() const {
 	glfwGetWindowPos(this->hWnd, &x, &y);
 	return { x,y };
 }
-glm::i32vec2 Window::getWindowSize() const {
+glm::u32vec2 Window::getWindowSize() const {
 	int x, y;
 	glfwGetWindowSize(this->hWnd, &x, &y);
 	return { x,y };

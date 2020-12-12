@@ -48,6 +48,7 @@
 #define COND_INFO(X, M, C) if(!(X)) {PRINT(M, C); }
 
 #define VK_CHECK(X, M, C, S) {VkResult res; if( (res = X) != VK_SUCCESS ){ PRINT_ERR(M + std::to_string(res), S, C); }}
+#define VK_CHECK_ERR(X,M,C) VK_CHECK(X,M,C, CH_SEVERITY_HALT)
 
 #define _TAG_SYNTAX_FORMATTER(d, a,b,c) (std::string("|")+d+"| "+ "[" + b + "] @" + a + ": " + c)
 
@@ -105,12 +106,12 @@ public:
 
 	///@brief Converts the passed pointer into a string
 	///Useful for deconst debugging
-	std::string pointerToString(const void* vkInst) const;
+	std::string pointerToString(const void*) const;
 
 	///@brief Converts the passed device pointer into a string
 	///Useful for deconst debugging
 	///Difference to pointerToString are solely about formatting
-	std::string devicePointerToString(const void* vkInst) const;
+	std::string devicePointerToString(const void*) const;
 
 	/// @brief Returns the instance (Singleton)
 	static ChannelPrintStream& instance();

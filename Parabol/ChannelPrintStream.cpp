@@ -26,7 +26,7 @@ void ChannelPrintStream::printInfo(const std::string& loc, const std::string& re
 		throw std::exception("Invalid PrintStream Index");
 	}
 }
-void ChannelPrintStream::printError(const std::string& loc, const std::string& f, uint64 severity, channel_indx ind) {
+void ChannelPrintStream::printError(const std::string& loc, const std::string& f, uint64 severity, channel_indx ind) noexcept(false) {
 	_prntFormattedSplit(loc, f, "ERROR", severity, ind);
 	if (severity >= CH_SEVERITY_WARNING) {
 		_haltOrWarn(loc, f, severity >= CH_SEVERITY_HALT);

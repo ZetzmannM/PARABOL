@@ -16,7 +16,7 @@ uint64 TimeHandler::getTickCount() {
 	}
 	auto elep = std::chrono::high_resolution_clock::now() - this->tickLast;
 	uint64 val =  (uint64)(((elep.count()+ ticksOverhead) / 1000000000.0f) * ticksPerSecond);
-	ticksOverhead = (elep.count() + ticksOverhead) - val * 1000000000 / ticksPerSecond;
+	ticksOverhead = static_cast<uint64>((elep.count() + ticksOverhead) - val * 1000000000 / ticksPerSecond);
 	this->tickLast = std::chrono::high_resolution_clock::now();
 	return val;
 }
@@ -26,7 +26,7 @@ void TimeHandler::vsync() {
 		if (!running) {
 			auto f = std::chrono::high_resolution_clock::now();
 			double diff = 0;
-			double fixValue = 1000000000L / fps - elapsedTime.count();
+			double fixValue = 1000000000.0L / fps - elapsedTime.count();
 			while (diff < fixValue) {
 				diff = static_cast<double>((std::chrono::high_resolution_clock::now() - f).count());
 			}

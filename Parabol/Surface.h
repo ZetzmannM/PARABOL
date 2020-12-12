@@ -47,7 +47,7 @@ namespace Surface {
 		WindowProperties getProperties() const;
 
 		glm::i32vec2 getWindowPosition() const;
-		glm::i32vec2 getWindowSize() const;
+		glm::u32vec2 getWindowSize() const;
 
 		/// @brief Conversion of Coordinates
 		/// @return The new Coordinates relative to the Window
