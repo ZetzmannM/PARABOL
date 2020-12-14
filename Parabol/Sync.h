@@ -13,16 +13,18 @@ namespace Sync {
 			binary = 0,
 			threshold = 1
 		};
+
 	private:
 		std::condition_variable var;
 		volatile uint64 state = 0;
+		bool autoReset = false;
 		const uint64 threshold = 1;
 		mutable std::mutex mtx;
-
+		
 	public:
 
 		/// @brief Creates a binary Barrier
-		Barrier(bool initState);
+		Barrier(bool initState = false, bool autoReset = false);
 
 		/// @brief Creates a Barrier with a specific threshold
 		/// This Barrier will release all waiting agents only if the state is

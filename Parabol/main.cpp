@@ -19,7 +19,67 @@
 #endif
 #endif
 
+#define VK_INSTANCE VK::VulkanInterface::instance()
+
 #include "VkUtils.h"
+
+VkCommandBuffer buffer;
+
+struct Render {
+	wrap_ptr<VK::QueueSet> queues;
+	wrap_ptr<VK::CommandPoolSet> cmdPools;
+	volatile uint32 indx = 0;
+	wrap_ptr<arr_ptr<VK::RenderSubmitSynchronizationPtrSet>> syncs;
+
+	bool running = true;
+
+	std::thread thr;
+
+	Render()  {
+	}
+	
+	void start() {
+		queues = new VK::QueueSet{ &VK::VulkanInterface::instance(), {true, false, false, false} };
+		cmdPools = new VK::CommandPoolSet{ &VK::VulkanInterface::instance(), {true, false, false, false} };
+
+		thr = std::thread(&Render::render, this);
+	}
+
+	~Render() {
+		thr.join();
+	}
+	
+	void render() {
+		while (running) {
+			syncs->operator[](indx).waitBeforeRender->wait();
+			PRINT_DEBUG("Render Main " + std::to_string(indx));
+
+			VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+
+			VkSubmitInfo submitInf = {};
+			submitInf.pNext = nullptr;
+			submitInf.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submitInf.waitSemaphoreCount = 1;
+			submitInf.pWaitSemaphores = syncs->operator[](indx).waitFor;
+			submitInf.pWaitDstStageMask = waitStages;
+			submitInf.signalSemaphoreCount = 1;
+			submitInf.pSignalSemaphores = syncs->operator[](indx).signal;
+			submitInf.commandBufferCount = 1;
+			submitInf.pCommandBuffers = &buffer;
+
+			vkQueueSubmit(this->queues->graphics, 1, &submitInf, *syncs->operator[](indx).signalFence);
+			syncs->operator[](indx).signalAfterSubmit->signal();
+		}
+	}
+
+};
+
+wrap_ptr<VK::QueueSet> queues;
+wrap_ptr<VK::CommandPoolSet> cmdPools;
+
+volatile uint32 indx;
+wrap_ptr<arr_ptr<VK::RenderSubmitSynchronizationPtrSet>> syncs;
+void render();
 
 #ifdef ENV_WINDOWS
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
@@ -36,21 +96,33 @@ int main() {
 		inf.window = &w;
 		inf.appInfo.name = "Test App";
 
+		inf.devProf.queueProfile = VK::DeviceQueueCount(2,1,0,0);
+
+		inf.swapChainProfile.swapchainImageSize = 2;
+
+		inf.renderProfile.includeMainThread = true;
+		inf.renderProfile.mainThreadRender = &render;
+
+		inf.renderProfile.threadGroups = { {0}, {1} };
+
+		Render rendr;
+
+		inf.renderProfile.renderThreads.push_back({ &indx, &syncs });
+		inf.renderProfile.renderThreads.push_back({&rendr.indx, &rendr.syncs});
+
 		VK::VulkanInterface::vkInit(inf);
 
-		VK::QueueSet queues{ &VK::VulkanInterface::instance(), {true, false, false, false} };
-		VK::CommandPoolSet cmdPools{ &VK::VulkanInterface::instance(), {true, false, false, false} };	
-		VK::RenderSubmitSynchronizationSet set[2];
-		set[0] = VK::VulkanInterface::instance().swapChain->syncPrimitiveForFrame(0);
-		set[1] = VK::VulkanInterface::instance().swapChain->syncPrimitiveForFrame(1);
-		VkCommandBuffer buffer;
+		rendr.start();
+
+		queues = new VK::QueueSet{ &VK::VulkanInterface::instance(), {true, false, false, false} };
+		cmdPools = new VK::CommandPoolSet{ &VK::VulkanInterface::instance(), {true, false, false, false} };	
 
 		VkCommandBufferAllocateInfo allocInf = {};
 		allocInf.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 		allocInf.pNext = nullptr;
 		allocInf.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		allocInf.commandBufferCount = 1;
-		allocInf.commandPool = cmdPools.graphics;
+		allocInf.commandPool = cmdPools->graphics;
 		
 		vkAllocateCommandBuffers(VK::VulkanInterface::instance().dev->hndl, &allocInf, &buffer);
 
@@ -63,47 +135,45 @@ int main() {
 		vkBeginCommandBuffer(buffer, &begInf);
 		vkEndCommandBuffer(buffer);
 
-		uint32 frame = 0;
-
 		//++++ TEST OVER ++++ 
 		while (!glfwWindowShouldClose(w.getGLFWHandle())) {
 			handl.start();
-			// Imagine this is a second thread *whistle*
-
-			frame = VK::VulkanInterface::nextFrame();
-
-			glfwSwapBuffers(w.getGLFWHandle());
-
-			set[frame].waitForRender->wait();
-			set[frame].waitForRender->reset();
-
-			PRINT_DEBUG(std::to_string(frame));
-			
-			VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-			
-			VkSubmitInfo submitInf = {};
-			submitInf.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-			submitInf.pNext = nullptr;
-			submitInf.pCommandBuffers = &buffer;
-			submitInf.commandBufferCount = 1;
-			submitInf.pSignalSemaphores = set[frame].signal;
-			submitInf.signalSemaphoreCount = 1;
-			submitInf.waitSemaphoreCount = 1;
-			submitInf.pWaitSemaphores = set[frame].waitFor;
-			submitInf.pWaitDstStageMask = &stageMask;
-
-			vkQueueSubmit(queues.graphics, 1, &submitInf, *(set[frame].signalFence));
-
-			//
+			VK::VulkanInterface::nextFrame();
 			handl.stop();
 			handl.vsync();
 
-
 			glfwPollEvents();
 		}
+	
+		rendr.running = false;
+		VK::VulkanInterface::destroyInstance();
 	}
 	glfwTerminate();
-	VK::VulkanInterface::destroyInstance();
-	
+
 	return 0;
+}
+
+void render() {	
+	//Not needed on Main thread
+	//set.waitBeforeRender->wait();
+
+	PRINT_DEBUG("Render Main " + std::to_string(indx));
+
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+
+	VkSubmitInfo submitInf = {};
+	submitInf.pNext = nullptr;
+	submitInf.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInf.waitSemaphoreCount = 1;
+	submitInf.pWaitSemaphores = syncs->operator[](indx).waitFor;
+	submitInf.pWaitDstStageMask = waitStages;
+	submitInf.signalSemaphoreCount = 1;
+	submitInf.pSignalSemaphores = syncs->operator[](indx).signal;
+	submitInf.commandBufferCount = 1;
+	submitInf.pCommandBuffers = &buffer;
+
+	vkQueueSubmit(queues->graphics, 1, &submitInf, *syncs->operator[](indx).signalFence);
+	
+	//Not needed on Main thread
+	//set.signalAfterSubmit->signal();
 }

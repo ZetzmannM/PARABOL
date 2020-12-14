@@ -25,7 +25,7 @@ namespace VK {
 		compute = 1,
 		present = 3
 	};
- 
+
 	struct Catalog {
 	private:
 		std::map<std::string, bool> values;
@@ -97,6 +97,49 @@ namespace VK {
 		bool compute = false;
 	};
 
+	/// @brief The threads responsible for rendering HAVE TO use these synchronization primitives to ensure synchronization with the SwapChain
+	/// These primitives should be cited for the last vkQueueSubmit as waitforSemaphore, signalSemaphore and the signalFence as an argument
+	/// the waitBeforeRender Barrier should be waited for before even beginning rendering and the signalAfterSubmit should be called right after the vkQueueSubmit that signals the renderFinishedSemaphore
+	struct RenderSubmitSynchronizationPtrSet {
+		VkSemaphore* waitFor = nullptr;
+		VkSemaphore* signal = nullptr;
+		VkFence* signalFence = nullptr;
+
+		//@brief Ignored on MainThread
+		///Auto reset enabled, no need to call reset() after wait()
+		Sync::Barrier* waitBeforeRender = nullptr;
+		
+		//@brief Ignored on MainThread.
+		Sync::Barrier* signalAfterSubmit = nullptr;
+	};
+
+	typedef std::function<void()> render_call_func;
+
+	struct RenderThreadData {
+		/// @brief Pointer
+		volatile uint32* currImg = nullptr;
+
+		/// @brief Pointer to an array that will be filled by calling VkInit
+		/// It contains the synchronization primitives that synchronize a Thread's rendering (queue submission)
+		/// to the Swapchains nextFrame command.
+		/// The pointer must point to an arbitrary but VALID arr_ptr
+		/// It will be overwritten by a suitable array of the correct size
+		wrap_ptr<arr_ptr<RenderSubmitSynchronizationPtrSet>>* syncPtrs = nullptr;
+	};
+
+	struct RenderThreadingProfile {
+		/// @brief 
+		bool includeMainThread = true;
+
+		/// @brief A table of which threads are responsible for rendering which frames, the first vector corresponds to the main thread, IF includeMainThread is enabled
+		std::vector<std::vector<uint32>> threadGroups = { {0,1} };
+		
+		/// @brief This method is called for rendering on the MainThread
+		render_call_func mainThreadRender;
+
+		/// @brief Data for the Render Threads
+		std::vector<RenderThreadData> renderThreads = {};
+	};
 	struct PhyDevProfile {
 		/// @brief list of required PhysicalDeviceExtensions
 		std::vector<std::string> requestedExtensions;
@@ -123,10 +166,9 @@ namespace VK {
 		/// To check which extensions/layers are enabled (and therefore available) check the layers/extensions catalog of the Device
 		/// Required Extensions for Debugging/GLFW are automatically added
 		std::vector<std::string> requestedExtensions;
-
 	};
 	struct SwapchainProfile {
-		uint32 swapchainImageSize = 1;
+		uint32 swapchainImageSize = 0; //Minimum usually
 
 	};
 	struct AppInfo {
@@ -145,6 +187,14 @@ namespace VK {
 
 		/// @brief Information about the SwapChain to be created
 		SwapchainProfile swapChainProfile;
+
+		/// @brief A description of the threading behaviour with respect to rendering
+		/// The swapchain frames CAN be rendered asynchronously by assigning every thread (potentially including the main thread) 
+		/// a set of frames. f.e. for a single thread application with 2 Images in the swapchain and rendering on the main thread,
+		/// the RenderingProfile is the default profile : {true, {{0,1}}}. With states, that the first entry of the second vector describes which frames are rendered on the mainThread
+		/// and the second vector specifies, that both frames should be rendered on the main thread.
+		/// An Application with 2 Threads CAN specify : {true, {{0}, {1}}} to render frame 0 on the first thread (main thread) and frame 1 on the second thread.
+		RenderThreadingProfile renderProfile;
 		
 		/// @brief Requested Layers & Extensions, if they are not availabe, they are ignored.
 		/// To check which extensions/layers are enabled (and therefore available) check the layers/extensions catalog of the Vulkaninstance
@@ -160,7 +210,6 @@ namespace VK {
 		Surface::Window* window = nullptr;
 
 	};
-
 
 	struct VulkanInterface;
 	struct VulkanInstance;
@@ -182,9 +231,7 @@ namespace VK {
 
 		static VulkanInstance& instance();
 
-		//
 		static uint32 nextFrame();
-		//
 
 		static void destroyInstance();
 	};
@@ -315,14 +362,23 @@ namespace VK {
 
 	};
 
-	/// @brief The threads responsible for rendering HAVE TO use these synchronization primitives to ensure synchronization with the SwapChain
-	/// These primitives should be cited for the last vkQueueSubmit as waitforSemaphore, signalSemaphore and the signalFence as an argument
-	/// the waitForRender Barrier should be waited for before even beginning rendering
+	/// @brief This is a wrapper class for the Sync Primitives used by the swapChain
 	struct RenderSubmitSynchronizationSet {
-		VkSemaphore* waitFor = nullptr;
-		VkSemaphore* signal = nullptr;
-		VkFence* signalFence = nullptr;
-		Sync::Barrier* waitForRender = nullptr;
+		VulkanInstance* vkInst = nullptr;
+
+		/// @brief ImageAvailableSemaphore
+		VkSemaphore waitFor = nullptr;
+		/// @brief RenderFinishedSemaphore
+		VkSemaphore signal = nullptr;
+		/// @brief RenderFinishedFence
+		VkFence signalFence = nullptr;
+
+		/// @brief Auto reset enabled, no need to call reset() after wait()
+		Sync::Barrier signalAfterSubmit; 
+
+		/// @brief RAII, takes the instance from VulkanInterface
+		RenderSubmitSynchronizationSet();
+		~RenderSubmitSynchronizationSet();
 	};
 
 	struct SwapChain {
@@ -332,19 +388,33 @@ namespace VK {
 		VkSwapchainKHR hndl = nullptr;
 
 	private:
-		std::vector<VkSemaphore> imageAvailableSemaphore;
-		std::vector<VkSemaphore> renderFinishedSemaphore;
-		std::vector<VkFence> renderFinishedFence;
-		std::vector<wrap_ptr<Sync::Barrier>> renderBeginBarrier;
+		
+		uint32 frameCount = 0;
 
-		std::vector<VkImage> swapChainImages;
-		std::vector<VkImageView> imageViews;
+		arr_ptr<Sync::Barrier> begBarriers;
+		arr_ptr<RenderSubmitSynchronizationSet> syncSet;
+
+		/// For faster access
+		arr_ptr<RenderSubmitSynchronizationPtrSet> ptrSets;
+		arr_ptr<bool> mainThr;
+		RenderThreadingProfile& prof;
+		arr_ptr<uint32> thrdIndx;
+		arr_ptr<volatile uint32*> currImgInd;
+		/// 
+
+		/// Images in the Swapchain
+		arr_ptr<VkImage> swapChainImages;
+		arr_ptr<VkImageView> imageViews;
+		//arr_ptr<FrameBuffer> frameBuffers;
+		/////////////////////////////////////////
 
 		QueueSet queues;
 		
+		/// Swapchain properties
 		VkSurfaceFormatKHR surfaceFormat;
 		VkPresentModeKHR presentMode;
 		VkExtent2D extend;
+		///
 
 	public:
 
@@ -352,7 +422,7 @@ namespace VK {
 		~SwapChain();
 
 		/// @brief See RenderSubmitSynchronizationSet
-		RenderSubmitSynchronizationSet syncPrimitiveForFrame(uint32 indx);
+		RenderSubmitSynchronizationPtrSet syncPrimitiveForFrame(uint32 indx);
 
 		/// @brief This method is 90% of the magic of the SwapChain, it basically presents the next frame and 
 		/// Causes the next to be rendered
@@ -362,12 +432,13 @@ namespace VK {
 		uint32 size();
 
 	private:
-		bool first = true;
-		uint32_t imageIndex = 0;
-
-		void _recreate();
-
 		uint32 currentFrame = 0;
+
+		void _nextFrame(uint32 imgIndx);
+		
+		/// @brief Called when the Swapchain is out of date and nextFrame is called,
+		/// Propagates changes to VulkanInstances
+		void _recreate();
 
 		struct __SCProps {
 			VkSurfaceFormatKHR surfaceFormat;
@@ -378,26 +449,6 @@ namespace VK {
 		void _destroy();
 		void _setup(SwapchainProfile scprf);
 		__SCProps queryFrom(const SurfaceProperties&);
-	};
-
-	/// @brief A wrapper class for a single Pipeline
-	struct Pipeline {
-		FRIEND_CLUB
-	private:
-
-	public:
-
-	private:
-	};
-	/// @brief This struct manages all Pipelines
-	struct PipelineSet {
-		FRIEND_CLUB
-	private:
-
-	public:
-
-	private:
-
 	};
 
 }

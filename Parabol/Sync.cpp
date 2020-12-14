@@ -3,7 +3,7 @@
 using namespace Sync;
 
 Barrier::Barrier(uint64 threshold, uint64 initValue) : threshold{threshold}, state{ initValue } {}
-Barrier::Barrier(bool initVal) : threshold{1u} {
+Barrier::Barrier(bool initVal, bool autoReset) : threshold{ 1u }, autoReset{ autoReset }{
 	state = (initVal ? 1 : 0);
 }
 
@@ -27,5 +27,8 @@ void Barrier::wait() {
 	std::unique_lock<std::mutex> lock = std::unique_lock<std::mutex>(this->mtx);
 	while (this->state < threshold) {
 		this->var.wait(lock);
+	}
+	if (this->autoReset) {
+		reset();
 	}
 }

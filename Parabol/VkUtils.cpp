@@ -16,7 +16,12 @@ wrap_ptr<VulkanInstance> VulkanInterface::inst = nullptr;
 
 void VulkanInterface::vkInit(const VulkanInstanceInfo& inf) {
 	if (!VulkanInterface::inst) {
-		VulkanInterface::inst = new VulkanInstance(inf);
+		std::allocator<VulkanInstance> alloc;
+		VulkanInstance* all = alloc.allocate(1);
+		VulkanInterface::inst = all;
+
+		//Construct It.
+		new (all) VulkanInstance(inf);
 	}
 	else {
 		PRINT_ERR("Vulkan instance already initialized!", CH_SEVERITY_HALT, CHANNEL_VULKAN);
@@ -368,7 +373,7 @@ void VulkanInstance::_findPhysicalDevice() {
 			//Finally actually check the Devices:
 			if ((std::find(this->instanceInfo.phyProf.acceptedTypes.begin(), this->instanceInfo.phyProf.acceptedTypes.end(), prop.deviceType) != this->instanceInfo.phyProf.acceptedTypes.end())
 				&&	phyDevFamilies.isComplete()) {
-				DEBUG_PRINT("Found device: " + std::string(prop.deviceName), CHANNEL_VULKAN);
+				DEBUG_PRINT("Picked Device: " + std::string(prop.deviceName), CHANNEL_VULKAN);
 
 				//Populate the PhysicalDevice struct
 				this->phyDev = new PhysicalDevice(this, dev, props, phyDevFamilies, prop, features);
@@ -402,6 +407,7 @@ Device::Device(VulkanInstance* ptr) : queueProf( ptr->instanceInfo.devProf.queue
 	//Create the desired Queues
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfo;
 	std::set<uint32> queueIds;
+	std::vector<std::vector<float>> priorities;
 	
 	for (auto it = profile.queueFamilies.begin(); it != profile.queueFamilies.end(); it++) {
 		if (it->second.first > 0) { //If any queues were requested at all
@@ -434,7 +440,14 @@ Device::Device(VulkanInstance* ptr) : queueProf( ptr->instanceInfo.devProf.queue
 
 				prf.queueFamilyIndex = indx;
 				prf.queueCount = it->second.first;
-				prf.pQueuePriorities = &(it->second.second);
+
+				std::vector<float> priors(it->second.first);
+				for (int i = 0; i < it->second.first; i++) {
+					priors[i] = it->second.second;
+				}
+				priorities.push_back(std::move(priors));
+				
+				prf.pQueuePriorities = priorities.at(priorities.size() -1).data();
 
 				queueCreateInfo.push_back(prf);
 				queueIds.insert(indx);
@@ -594,15 +607,15 @@ QueueSet::QueueSet(VulkanInstance* inst, QueueProfile prof) {
 }
 void QueueSet::_fetch(VulkanInstance* ptr, int g, int p, int t, int c) {
 	if (g> -1) {
-		vkGetDeviceQueue(ptr->dev->hndl, ptr->phyDev->queueFamilies.graphics.index, g, &graphics);
+vkGetDeviceQueue(ptr->dev->hndl, ptr->phyDev->queueFamilies.graphics.index, g, &graphics);
 	}
-	if (p> -1) {
+	if (p > -1) {
 		vkGetDeviceQueue(ptr->dev->hndl, ptr->phyDev->queueFamilies.present.index, p, &present);
 	}
-	if (t> -1) {
+	if (t > -1) {
 		vkGetDeviceQueue(ptr->dev->hndl, ptr->phyDev->queueFamilies.transfer.index, t, &transfer);
 	}
-	if (c> -1) {
+	if (c > -1) {
 		vkGetDeviceQueue(ptr->dev->hndl, ptr->phyDev->queueFamilies.compute.index, c, &compute);
 	}
 }
@@ -661,7 +674,7 @@ VkCommandPool CommandPoolSet::_create(uint32 ind, VkCommandPoolCreateFlags flags
 	return temp;
 }
 
-SwapChain::SwapChain(VulkanInstance* ptr, SwapchainProfile scprf) : vkInst( ptr ), queues(ptr, {false, true,false,false} ) {
+SwapChain::SwapChain(VulkanInstance* ptr, SwapchainProfile scprf) : vkInst(ptr), queues(ptr, { false, true,false,false }), prof(vkInst->instanceInfo.renderProfile) {
 	_setup(scprf);
 
 	VkSemaphoreCreateInfo semaphoreInfo = {};
@@ -671,22 +684,70 @@ SwapChain::SwapChain(VulkanInstance* ptr, SwapchainProfile scprf) : vkInst( ptr 
 	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-	this->imageAvailableSemaphore.resize(this->imageViews.size());
-	this->renderFinishedSemaphore.resize(this->imageViews.size());
-	this->renderFinishedFence.resize(this->imageViews.size());
+	RenderThreadingProfile& prf = vkInst->instanceInfo.renderProfile;
+	syncSet = arr_ptr<RenderSubmitSynchronizationSet>(this->frameCount);
 
-	VkResult res = VK_SUCCESS;
+	begBarriers = arr_ptr<Sync::Barrier>(prf.threadGroups.size());
 
-	for (uint32 s = 0; s < this->imageViews.size(); s++) {
-		if ((res = vkCreateSemaphore(vkInst->dev->hndl, &semaphoreInfo, nullptr, &this->imageAvailableSemaphore[s])) != VK_SUCCESS ||
-			(res = vkCreateSemaphore(vkInst->dev->hndl, &semaphoreInfo, nullptr, &this->renderFinishedSemaphore[s])) != VK_SUCCESS) {
-			PRINT_ERR("Render Semaphores creation failed! " + std::to_string(res), CH_SEVERITY_HALT, CHANNEL_VULKAN);
-		}
-		if ((res = vkCreateFence(vkInst->dev->hndl, &fenceInfo, NULL, &this->renderFinishedFence[s])) != VK_SUCCESS) {
-			PRINT_ERR("Fence Creation failed " + std::to_string(res), CH_SEVERITY_HALT, CHANNEL_VULKAN);
-		}
-		renderBeginBarrier.push_back(new Sync::Barrier(true));
+	ptrSets = arr_ptr<RenderSubmitSynchronizationPtrSet>(size());
+	thrdIndx = arr_ptr<uint32>(size());
+	currImgInd = arr_ptr<volatile uint32*>(size());
+
+	for (size_t t = 0; t < this->frameCount; t++) {
+		ptrSets[t].signal = &syncSet[t].signal;
+		ptrSets[t].signalAfterSubmit = &syncSet[t].signalAfterSubmit;
+		ptrSets[t].signalFence = &syncSet[t].signalFence;
+		ptrSets[t].waitFor = &syncSet[t].waitFor;
 	}
+
+	/// Saves whether a thread is rendered on the main thread or not
+	this->mainThr = arr_ptr<bool>(size());
+
+	std::vector<bool> ve(this->frameCount);
+
+	uint32 indx = 0;
+	for (auto it = prf.threadGroups.begin(); it != prf.threadGroups.end(); it++) {
+		uint32 tInd = 0;
+		
+		//Create SynPrim array
+		(*prof.renderThreads[indx].syncPtrs) = new arr_ptr<RenderSubmitSynchronizationPtrSet>(it->size());
+
+		for (auto it2 = it->begin(); it2 != it->end(); it2++) {
+			if (*it2 >= this->frameCount) {
+				PRINT_ERR("Invalid RenderThreadingProfile! Invalid Frame index", CH_SEVERITY_HALT, CHANNEL_VULKAN);
+			}
+			ptrSets[*it2].waitBeforeRender = &begBarriers[indx];
+
+			//No duplicate assignment of frames to a thread!
+			if (ve[*it2]) {
+				PRINT_ERR("Inavlid RenderThreadingProfile! The frame index sets are not disjoint!", CH_SEVERITY_HALT, CHANNEL_VULKAN);
+			}
+
+			ve[*it2] = true;
+			if (indx == 0 && prf.includeMainThread) {
+				mainThr[*it2] = true;
+			}
+
+			thrdIndx[*it2] = tInd;
+			currImgInd[*it2] = prof.renderThreads[indx].currImg;
+
+			//Uchh ugly 
+			(prof.renderThreads[indx].syncPtrs->get())->operator[](tInd) = ptrSets[*it2];
+
+			tInd++;
+		}
+		indx++;
+	}
+
+	//All frames must have been assigned to a thread (of course)
+	bool validProfile = true;
+	for (size_t t = 0; t < this->frameCount; t++) {
+		validProfile = ve[t];
+		if (!validProfile) {
+			PRINT_ERR("Invalid RenderThreadingProfile! Not every Frame has been assigned a thread", CH_SEVERITY_HALT, CHANNEL_VULKAN);
+		}
+	}
+
 }
 void SwapChain::_setup(SwapchainProfile scprf) {
 	SurfaceProperties& surfaceProp = vkInst->phyDev->surfProps;
@@ -695,6 +756,7 @@ void SwapChain::_setup(SwapchainProfile scprf) {
 	uint32 imageCount = std::clamp<uint32>(scprf.swapchainImageSize, surfaceProp.capabilities.minImageCount, surfaceProp.capabilities.maxImageCount);
 
 	scprf.swapchainImageSize = imageCount;
+	this->frameCount = imageCount;
 
 	// ++++++++++++ Actual creation +++++++++++++
 
@@ -734,10 +796,9 @@ void SwapChain::_setup(SwapchainProfile scprf) {
 
 	VK_CHECK_ERR(vkCreateSwapchainKHR(this->vkInst->dev->hndl, &inf, NULL, &this->hndl), "SwapChainSetupFailure (vkCreateSwapchainKHR) ", CHANNEL_VULKAN);
 
-	this->swapChainImages.clear();
 	uint32 imgCount = 0;
 	VK_CHECK_ERR(vkGetSwapchainImagesKHR(vkInst->dev->hndl, this->hndl, &imgCount, NULL), "SwapChainSetupFailure (vkGetSwapchainImagesKHR query count)", CHANNEL_VULKAN);
-	this->swapChainImages.resize(imgCount);
+	this->swapChainImages = arr_ptr<VkImage>(imgCount);
 	VK_CHECK_ERR(vkGetSwapchainImagesKHR(vkInst->dev->hndl, this->hndl, &imgCount, this->swapChainImages.data()), "vkGetSwapchainImagesKHR (vkGetSwapchainImagesKHR)", CHANNEL_VULKAN);
 	
 	this->surfaceFormat = props.surfaceFormat;
@@ -748,8 +809,7 @@ void SwapChain::_setup(SwapchainProfile scprf) {
 	/// Image View Creation:
 	///*++++++++++++++++++++++++++++++++++++	
 
-	imageViews.clear();
-	imageViews.resize(swapChainImages.size());
+	imageViews = arr_ptr<VkImageView>(swapChainImages.size());
 	for (size_t i = 0; i < imageViews.size(); i++) {
 		VkImageViewCreateInfo createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -778,15 +838,8 @@ void SwapChain::_destroy() {
 SwapChain::~SwapChain() {
 	_destroy();
 	
-	//Cleanup Semaphores & 
-	for (VkSemaphore s : this->imageAvailableSemaphore) {
-		vkDestroySemaphore(this->vkInst->dev->hndl, s, NULL);
-	}
-	for (VkSemaphore s : this->renderFinishedSemaphore) {
-		vkDestroySemaphore(this->vkInst->dev->hndl, s, NULL);
-	}
-	for (VkFence f : this->renderFinishedFence) {
-		vkDestroyFence(this->vkInst->dev->hndl, f, NULL);
+	for (uint32 t = 0; t < this->begBarriers.size(); t++) {
+		this->begBarriers[t].signal();
 	}
 }
 SwapChain::__SCProps SwapChain::queryFrom(const SurfaceProperties& prop) {
@@ -823,51 +876,60 @@ SwapChain::__SCProps SwapChain::queryFrom(const SurfaceProperties& prop) {
 	return str;
 }
 uint32 SwapChain::nextFrame() {
-
-	if(!first){
-		VkSemaphore waitSems[] = { renderFinishedSemaphore[currentFrame] };
-
-		VkPresentInfoKHR presentInfo = {};
-		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = waitSems;
-
-		VkSwapchainKHR swapChains[] = { this->hndl };
-		presentInfo.swapchainCount = 1;
-		presentInfo.pSwapchains = swapChains;
-		presentInfo.pImageIndices = &imageIndex;
-		presentInfo.pResults = nullptr; // Optional
-
-		//This waits for the Client to have finished Rendering
-
-		VK_CHECK_ERR(vkQueuePresentKHR(this->queues.present, &presentInfo), "Failed QueuePresent ", CHANNEL_VULKAN);
-
-		//Advance to next Frame :)
-		currentFrame = (currentFrame + 1u) % this->size();
-
-	}
-	else {
-		first = false;
-	}
-
-	imageIndex = 0;
-	vkWaitForFences(vkInst->dev->hndl, 1, &renderFinishedFence[currentFrame], VK_TRUE, UINT64_MAX);
 	
-	//Client can begin Rendering
-	this->renderBeginBarrier[currentFrame]->signal();
+	_nextFrame(currentFrame);
+	
+	uint32 cF = currentFrame;
+	currentFrame = (currentFrame + 1u) % this->frameCount;
+	return cF;
+}
+void SwapChain::_nextFrame(uint32 indx) {
+	uint32_t imageIndex = 0;
 
-	VkResult res = vkAcquireNextImageKHR(vkInst->dev->hndl, this->hndl, UINT64_MAX, imageAvailableSemaphore[currentFrame], VK_NULL_HANDLE, &imageIndex);
+	//Dont become confused with the naming of the Synchronization primitives, this is the internal implementation of their function
+	//So the Semaphore "waitFor" f.e. has to SIGNALED here etc.
+
+	vkWaitForFences(this->vkInst->dev->hndl, 1, ptrSets[indx].signalFence, VK_TRUE, UINT64_MAX);
+	//Not great.
+	VkResult res = vkAcquireNextImageKHR(this->vkInst->dev->hndl, this->hndl, UINT64_MAX, *(ptrSets[indx].waitFor), VK_NULL_HANDLE, &imageIndex);
 	if (res == VK_ERROR_OUT_OF_DATE_KHR) {
 		_recreate();
-		return currentFrame;
+		return;
 	}
 	else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
-		PRINT_ERR("vkAcquireNextImageKHR rt'd " + std::to_string(res), CH_SEVERITY_HALT, CHANNEL_VULKAN);
+		PRINT_ERR("vkAcquireNextImageKHR rt'd badly " + std::to_string(res), CH_SEVERITY_HALT, CHANNEL_VULKAN);
 	}
 
-	vkResetFences(vkInst->dev->hndl, 1, &renderFinishedFence[currentFrame]);
+	vkResetFences(this->vkInst->dev->hndl, 1, ptrSets[indx].signalFence);
 
-	return currentFrame;
+	//Notify Thread, which frame should be rendered
+	(*currImgInd[indx]) = thrdIndx[indx];
+
+	if (mainThr[indx]) {
+		prof.mainThreadRender();
+	}
+	else {
+		//Signal Thread to begin rendering
+		ptrSets[indx].waitBeforeRender->signal();
+		//Render Render Render Render...
+		// Wait for the Thread to finish SUBMISSION (NOT rendering)
+		ptrSets[indx].signalAfterSubmit->wait();
+	}
+
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = ptrSets[indx].signal;
+
+	VkSwapchainKHR swapChains[] = { this->hndl };
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapChains;
+	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pResults = nullptr; // Optional
+
+	vkQueuePresentKHR(queues.present, &presentInfo);
+	PRINT_DEBUG("PRESENT, WOOW suhc image");
 }
 void SwapChain::_recreate() {
 	DEBUG_PRINT("SwapChainRecreate!", CHANNEL_VULKAN);
@@ -877,8 +939,27 @@ void SwapChain::_recreate() {
 	this->vkInst->_swapChainRecreateNotify();
 }
 uint32 SwapChain::size() {
-	return this->imageViews.size();
+	return this->frameCount;
 }
-RenderSubmitSynchronizationSet SwapChain::syncPrimitiveForFrame(uint32 indx) {
-	return {&imageAvailableSemaphore[indx], &renderFinishedSemaphore[indx], &renderFinishedFence[indx], renderBeginBarrier[indx].get()};
+RenderSubmitSynchronizationPtrSet SwapChain::syncPrimitiveForFrame(uint32 indx) {
+	return ptrSets[indx];
+}
+
+RenderSubmitSynchronizationSet::~RenderSubmitSynchronizationSet() {
+	vkDestroySemaphore(this->vkInst->dev->hndl, waitFor, NULL);
+	vkDestroySemaphore(this->vkInst->dev->hndl, signal, NULL);
+	vkDestroyFence(this->vkInst->dev->hndl, signalFence, NULL);
+}
+RenderSubmitSynchronizationSet::RenderSubmitSynchronizationSet() : vkInst(&VK::VulkanInterface::instance()), signalAfterSubmit( false, true ) {
+	VkSemaphoreCreateInfo semaphoreInfo = {};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkFenceCreateInfo fenceInfo = {};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	
+	vkCreateSemaphore(this->vkInst->dev->hndl, &semaphoreInfo, NULL, &this->signal);
+	vkCreateSemaphore(this->vkInst->dev->hndl, &semaphoreInfo, NULL, &this->waitFor);
+
+	vkCreateFence(this->vkInst->dev->hndl, &fenceInfo, NULL, &this->signalFence);
 }
